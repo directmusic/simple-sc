@@ -1,0 +1,21 @@
+BasedOnStyle: WebKit
+AlignAfterOpenBracket: true
+BreakBeforeBraces: Attach
+MaxEmptyLinesToKeep: '1'
+NamespaceIndentation: None
+SortIncludes: 'true'
+EmptyLineAfterAccessModifier: Leave
+EmptyLineBeforeAccessModifier: Leave
+
+AllowShortFunctionsOnASingleLine: true
+AllowShortLambdasOnASingleLine: true
+AllowShortEnumsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortCaseLabelsOnASingleLine: true
+
+BreakBeforeTernaryOperators: true
+IndentPPDirectives: None
+SeparateDefinitionBlocks: Leave
+SpaceAfterCStyleCast: false
+BinPackArguments: false
+BinPackParameters: false
