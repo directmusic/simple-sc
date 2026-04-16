@@ -3,7 +3,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE STRING " COol")
 
 project(pipewire_video_capture LANGUAGES C CXX VERSION 1.1.0)
 
-add_executable(pipewire_video_capture main.cc pipewire_capture.cc)
+add_executable(pipewire_video_capture main.cc screencast_portal.cc)
 
 find_package(PkgConfig)
 
