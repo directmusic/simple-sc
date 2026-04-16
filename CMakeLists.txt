@@ -1,12 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE STRING " COol")
 
-project(pipewire_video_capture LANGUAGES C CXX VERSION 1.1.0)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE STRING "")
 
-add_executable(pipewire_video_capture main.cc screencast_portal.cc)
+project(pw-record LANGUAGES C CXX VERSION 1.0.0)
+add_executable(pw-record main.cc screencast_portal.cc)
 
 find_package(PkgConfig)
-
 
 pkg_check_modules(PIPEWIRE libpipewire-0.3 REQUIRED)
 pkg_check_modules(DBUS dbus-1 REQUIRED)
@@ -18,7 +17,7 @@ pkg_check_modules(SWSCALE libswscale REQUIRED)
 pkg_check_modules(SWRESAMPLE libswresample REQUIRED)
 
 # Link libraries
-target_include_directories(pipewire_video_capture PUBLIC
+target_include_directories(pw-record PUBLIC
     ${PIPEWIRE_INCLUDE_DIRS}
     ${DBUS_INCLUDE_DIRS}
     ${PORTAL_INCLUDE_DIRS}
@@ -28,7 +27,8 @@ target_include_directories(pipewire_video_capture PUBLIC
     ${SWSCALE_INCLUDE_DIRS}
     ${SWRESAMPLE_INCLUDE_DIRS}
 )
-target_link_libraries(pipewire_video_capture
+
+target_link_libraries(pw-record
     ${PIPEWIRE_LIBRARIES}
     ${DBUS_LIBRARIES}
     ${PORTAL_LIBRARIES}
