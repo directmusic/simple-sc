@@ -26,7 +26,7 @@ Ensure the following dependencies are installed:\
 ```pacman -S base-devel cmake libpipewire dbus libportal ffmpeg```
 
 **Ubuntu 22.04 (and later)**\
-```apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev```
+```apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev```
 
 ##### Building From Source
 Once the dependencies above are installed then run the following command:
