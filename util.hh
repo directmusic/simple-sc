@@ -20,3 +20,16 @@ inline uint64_t get_timestamp_ms() {
     gettimeofday(&tp, NULL);
     return tp.tv_sec * 1000 + tp.tv_usec / 1000;
 }
+
+inline int next_power_of_two(int val) {
+    unsigned int v;
+
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v++;
+    return v;
+}

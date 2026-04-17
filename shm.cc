@@ -6,8 +6,8 @@
 
 const char* const SHM_NAME = "simple-sc-instance-data";
 
-bool handle_exists() { return get_other_instance_pid() != 0; }
-pid_t get_other_instance_pid() {
+bool shm_handle_exists() { return shm_get_other_instance_pid() != 0; }
+pid_t shm_get_other_instance_pid() {
     int fd = shm_open(SHM_NAME, O_RDWR, 0666);
     if (fd >= 0) {
         ftruncate(fd, sizeof(SharedMemory));
@@ -18,7 +18,7 @@ pid_t get_other_instance_pid() {
     return 0;
 }
 
-SharedMemory* create_handle_with_pid() {
+SharedMemory* shm_create_handle_with_pid() {
     int fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
     if (fd >= 0) {
         ftruncate(fd, sizeof(SharedMemory));
@@ -36,4 +36,4 @@ SharedMemory* create_handle_with_pid() {
     return ptr;
 }
 
-void delete_handle() { shm_unlink(SHM_NAME); }
+void shm_delete_handle() { shm_unlink(SHM_NAME); }

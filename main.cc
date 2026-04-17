@@ -5,6 +5,7 @@
 #include "shm.hh"
 #include "spa/utils/defs.h"
 #include "util.hh"
+#include <cstdint>
 #include <libportal/portal.h>
 #include <pipewire/pipewire.h>
 #include <spa/debug/types.h>
@@ -13,7 +14,6 @@
 #include <spa/param/video/type-info.h>
 #include <sys/time.h>
 
-#include <array>
 #include <string>
 #include <thread>
 #include <vector>
@@ -29,32 +29,34 @@ extern "C" {
 static std::atomic<bool> g_done = false;
 
 struct VideoFrame {
-    // FIXME: We could create an array that is the size of width*height*4 and
-    // index into it globally to prevent over allocation
-    std::array<uint8_t, 4096 * 4096 * 4> data;
+    uint8_t* alloc = nullptr;
     int w, h, stride;
-    uint64_t ts; // timestamp
+    uint64_t timestamp_ms;
+};
+
+struct AudioFrame {
+    uint8_t* alloc = nullptr;
+    uint32_t n_samples;
 };
 
 static std::vector<VideoFrame> g_v_frame_data;
 static int g_v_frame_idx = 0;
 
-struct AudioFrame {
-    std::vector<uint8_t> data;
-    uint32_t n_samples;
-};
+static std::vector<AudioFrame> g_a_frame_data;
+static int g_a_frame_idx = 0;
 
-static RingBuffer<VideoFrame*, 16> g_video_frame_data;
-static RingBuffer<AudioFrame, 256> g_audio_frame_data;
+static constexpr int VIDEO_DATA_SIZE = 16;
+static constexpr int AUDIO_DATA_SIZE = 256;
+
+static RingBuffer<VideoFrame*, VIDEO_DATA_SIZE> g_video_frame_data;
+static RingBuffer<AudioFrame*, AUDIO_DATA_SIZE> g_audio_frame_data;
 
 struct VideoRecordData {
     struct pw_main_loop* loop;
     struct pw_stream* stream;
     struct spa_video_info format;
+    uint64_t first_frame_timestamp;
 };
-
-static uint64_t g_time_scale_mul = 0;
-static uint64_t first = 0;
 
 // --------------------------------------------------------------
 // ENCODING
@@ -89,8 +91,6 @@ struct EncoderContext {
         cod_ctx->height = round(height / 2) * 2;
 
         cod_ctx->time_base = (AVRational) { 1, 1000 };
-        cod_ctx->framerate = (AVRational) { 60, 1 };
-        g_time_scale_mul = (1000.0f / 60);
 
         cod_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
         // keyframe
@@ -167,7 +167,7 @@ struct EncoderContext {
 
     void submit_video(const VideoFrame* raw) {
         // convert BGR -> YUV420P
-        const uint8_t* src_slices[] = { raw->data.data() };
+        const uint8_t* src_slices[] = { raw->alloc };
         const int src_stride[] = { raw->stride };
 
         av_frame_make_writable(frame);
@@ -179,36 +179,36 @@ struct EncoderContext {
                   frame->data,
                   frame->linesize);
 
-        frame->pts = pts++;
+        int64_t current_pts = raw->timestamp_ms;
+        if (current_pts <= prev_frame_pts) {
+            // drop frames
+            return;
+        }
+        prev_frame_pts = current_pts;
+        frame->pts = current_pts;
 
         avcodec_send_frame(cod_ctx, frame);
 
         // drain
         while (avcodec_receive_packet(cod_ctx, packet) == 0) {
-            packet->pts = raw->ts * g_time_scale_mul;
-            if (prev_frame_pts >= packet->pts) {
-                av_packet_unref(packet);
-                continue;
-            }
-            packet->dts = raw->ts * g_time_scale_mul;
-            packet->duration = g_time_scale_mul;
+            av_packet_rescale_ts(packet, cod_ctx->time_base, stream->time_base);
             packet->stream_index = stream->index;
             av_interleaved_write_frame(fmt_ctx, packet);
             av_packet_unref(packet);
-            prev_frame_pts = packet->pts;
         }
+        prev_frame_pts = packet->pts;
     }
 
-    void submit_audio(const AudioFrame& raw) {
+    void submit_audio(const AudioFrame* raw) {
         // input: interleaved S16 pointer
-        const uint8_t* in[] = { raw.data.data() };
+        const uint8_t* in[] = { raw->alloc };
 
         av_frame_make_writable(audio_frame);
         swr_convert(swr_ctx,
                     audio_frame->data,
                     audio_frame->nb_samples,
                     in,
-                    raw.n_samples);
+                    raw->n_samples);
 
         audio_frame->pts = audio_pts;
         audio_pts += audio_frame->nb_samples;
@@ -279,11 +279,18 @@ static void on_process(void* userdata) {
     frame->w = data->format.info.raw.size.width;
     frame->h = data->format.info.raw.size.height;
     frame->stride = d->chunk->stride;
-    // frame.data.assign((uint8_t*)d->data, (uint8_t*)d->data + d->chunk->size);
-    memcpy(frame->data.data(), d->data, d->chunk->size);
+    if (!frame->alloc) {
+        frame->alloc = (uint8_t*)malloc(frame->w * frame->h * 4);
+    }
+    memcpy(frame->alloc, d->data, d->chunk->size);
+    // memcpy(frame->data.data(), d->data, d->chunk->size);
 
-    if (first == 0) first = get_timestamp_ms();
-    frame->ts = get_timestamp_ms() - first;
+    // set the first frame timestamp so we can get the relative time for each
+    // following frame
+    if (data->first_frame_timestamp == 0) {
+        data->first_frame_timestamp = get_timestamp_ms();
+    }
+    frame->timestamp_ms = (get_timestamp_ms() - data->first_frame_timestamp);
 
     g_video_frame_data.write(&g_v_frame_data[g_v_frame_idx]);
 
@@ -337,19 +344,6 @@ static const struct pw_stream_events stream_events = {
     .process = on_process,
 };
 
-static int next_power_of_two(int val) {
-    unsigned int v;
-
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;
-    return v;
-}
-
 // ----------------------------------------------
 // AUDIO
 // ----------------------------------------------
@@ -362,13 +356,17 @@ static void on_audio_process(void* userdata) {
 
     struct spa_data* d = &b->buffer->datas[0];
     if (d->data && d->chunk->size > 0) {
-        AudioFrame frame;
-        frame.n_samples = d->chunk->size / (2 * sizeof(int16_t)); // stereo S16
-        frame.data.assign(
-            (uint8_t*)d->data,
-            (uint8_t*)d->data + d->chunk->size);
+        AudioFrame* frame = &g_a_frame_data[g_a_frame_idx];
+        frame->n_samples = d->chunk->size / (2 * sizeof(int16_t)); // stereo S16
+        if (!frame->alloc) {
+            frame->alloc = (uint8_t*)malloc(d->chunk->size);
+        }
 
-        g_audio_frame_data.write(std::move(frame));
+        memcpy(frame->alloc, d->data, d->chunk->size);
+        g_audio_frame_data.write(frame);
+
+        g_a_frame_idx += 1;
+        g_a_frame_idx %= g_a_frame_data.size();
     }
 
     pw_stream_queue_buffer(g_audio_stream, b);
@@ -416,6 +414,12 @@ static void on_sigint(int dummy) {
     g_done = true;
 }
 
+static void on_sigsegv(int dummy) {
+    // if we crash we still need to clean up the shared memory
+    shm_delete_handle();
+    exit(1);
+}
+
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -435,15 +439,15 @@ int main(int argc, char* argv[]) {
             g_output_file_path = argv[i + 1];
             i++;
         } else if (arg == "-s" || arg == "--stop") {
-            pid_t pid = get_other_instance_pid();
+            pid_t pid = shm_get_other_instance_pid();
             if (pid == 0) {
                 fprintf(stderr, "No other instance of simple-sc running.");
                 // delete the handle anyway
-                delete_handle();
+                shm_delete_handle();
             } else {
                 printf("Stopping recording from pid: %d\n", pid);
                 kill(pid, SIGINT);
-                delete_handle();
+                shm_delete_handle();
             }
             return 0;
         } else {
@@ -452,13 +456,18 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (get_other_instance_pid() != 0) {
+    if (shm_get_other_instance_pid() != 0) {
         fprintf(stderr, "[WARN] a screen recording is already in progress. Run with the -s/--stop flag to stop in progress recordings");
-        return 1;
+        auto pid = shm_get_other_instance_pid();
+        printf("Stopping recording from pid: %d\n", pid);
+        kill(pid, SIGINT);
+        shm_delete_handle();
+        // return 1;
     }
 
     // add the signal handler
     signal(SIGINT, on_sigint);
+    signal(SIGSEGV, on_sigsegv);
 
     // opens the portal dialog
     ScreencastPortalData portal_data;
@@ -471,7 +480,8 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    g_v_frame_data.resize(16);
+    g_v_frame_data.resize(VIDEO_DATA_SIZE);
+    g_a_frame_data.resize(AUDIO_DATA_SIZE);
     struct VideoRecordData data = { 0 };
 
     const struct spa_pod* audio_params[1];
@@ -618,10 +628,10 @@ int main(int argc, char* argv[]) {
         // cleanup
         enc.close();
         pw_main_loop_quit(data.loop);
-        delete_handle();
+        shm_delete_handle();
     }));
 
-    create_handle_with_pid();
+    shm_create_handle_with_pid();
 
     pw_main_loop_run(data.loop);
 
@@ -631,7 +641,7 @@ int main(int argc, char* argv[]) {
     pw_core_disconnect(core);
     pw_context_destroy(context);
     pw_main_loop_destroy(data.loop);
-    delete_handle();
+    shm_delete_handle();
 
     return 0;
 }
