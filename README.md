@@ -1,4 +1,4 @@
-# pw-record
+# simple-sc
 
 ### Dependencies
 
@@ -16,8 +16,12 @@ libswresample
 ### Building
 
 ```
-mkdir build
-cd build
-cmake ..
-make
+cmake -B build
+cmake --build build --config Release
+```
+
+##### Installing
+```
+cmake -B build
+cmake --build build --target install --config Release
 ```
