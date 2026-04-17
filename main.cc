@@ -459,10 +459,7 @@ int main(int argc, char* argv[]) {
     if (shm_get_other_instance_pid() != 0) {
         fprintf(stderr, "[WARN] a screen recording is already in progress. Run with the -s/--stop flag to stop in progress recordings");
         auto pid = shm_get_other_instance_pid();
-        printf("Stopping recording from pid: %d\n", pid);
-        kill(pid, SIGINT);
-        shm_delete_handle();
-        // return 1;
+        return 1;
     }
 
     // add the signal handler
@@ -549,18 +546,22 @@ int main(int argc, char* argv[]) {
                                                                                 &max_fps)));
 
     // AUDIO
-    struct pw_properties* audio_props = pw_properties_new(
-        PW_KEY_MEDIA_TYPE,
-        "Audio",
-        PW_KEY_MEDIA_CATEGORY,
-        "Capture",
-        PW_KEY_MEDIA_ROLE,
-        "Screen",
-        PW_KEY_STREAM_CAPTURE_SINK,
-        "true",
-        NULL);
+    struct pw_properties* audio_props
+        = pw_properties_new(PW_KEY_MEDIA_TYPE,
+                            "Audio",
+                            PW_KEY_MEDIA_CATEGORY,
+                            "Capture",
+                            PW_KEY_MEDIA_ROLE,
+                            "Screen",
+                            PW_KEY_STREAM_CAPTURE_SINK,
+                            "true",
+                            NULL);
 
-    g_audio_stream = pw_stream_new_simple(pw_main_loop_get_loop(data.loop), "audio-capture", audio_props, &audio_stream_events, nullptr);
+    g_audio_stream = pw_stream_new_simple(pw_main_loop_get_loop(data.loop),
+                                          "audio-capture",
+                                          audio_props,
+                                          &audio_stream_events,
+                                          nullptr);
 
     // g_audio_stream = pw_stream_new(core, "audio-capture", audio_props);
     // struct spa_hook listener;
