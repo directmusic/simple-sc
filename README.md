@@ -22,7 +22,10 @@ Ensure the following dependencies are installed:
 `libpipewire-0.3 dbus-1 libportal libavcodec libavformat libavutil libswscale libswresample`
 
 **Arch**
-`pacman -S libpipewire dbus libportal ffmpeg`
+`pacman -S base-devel cmake libpipewire dbus libportal ffmpeg`
+
+**Ubuntu 22.04 (and later)**
+`apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev`
 
 ### Dependencies
 
