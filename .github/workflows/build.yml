@@ -8,14 +8,17 @@ jobs:
   build-ubuntu:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
       - name: Install Dependencies
         run: |
           sudo apt install -y build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev
       - name: Generate Build Script
-        working-directory: ${{ github.workspace }}/
         run: |
           cmake -B build
       - name: Build
-        working-directory: ${{ github.workspace }}/
         run: |
           cmake --build build --config Release
