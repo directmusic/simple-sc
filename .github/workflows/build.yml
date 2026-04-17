@@ -15,7 +15,7 @@ jobs:
           fetch-depth: 1
       - name: Install Dependencies
         run: |
-          sudo apt install -y build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev
+          sudo apt install -y build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev
       - name: Generate Build Script
         run: |
           cmake -B build
