@@ -1,0 +1,19 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-noble
+      steps:
+        - name: Install Dependencies
+          run: |
+            apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev
+        - name: Generate Build Script
+          run: |
+            cmake -B build
+        - name: Build
+          run: |
+            cmake --build build --config Release
