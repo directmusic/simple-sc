@@ -441,16 +441,17 @@ static void on_sigsegv(int dummy) {
 }
 
 int main(int argc, char* argv[]) {
-    bool hook_handlers = true;
+    bool hook_handler = true;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
         if (arg == "-h" || arg == "--help") {
             printf("Usage: simple-sc [options]\n");
             printf("Options:\n");
-            printf("  -h, --help    Show this help message\n");
-            printf("  -o, --output  Change the output file path. (defaults to $HOME/Videos/[timestamp].mp4)\n");
-            printf("  -s, --stop    Stops other instances of simple-sc that may be in progress.\n");
+            printf("  -h, --help         Show this help message\n");
+            printf("  -o, --output       Change the output file path. (defaults to $HOME/Videos/[timestamp].mp4)\n");
+            printf("  -s, --stop         Stops other instances of simple-sc that may be in progress.\n");
+            printf("  -n, --no-handler   [Developer Use] Don't attach the SIGSEGV handler. Helpful when debugging.\n");
             return 0;
         } else if (arg == "-o" || arg == "--output") {
             if (i + 1 >= argc || argv[i + 1][0] == '-') {
@@ -472,7 +473,7 @@ int main(int argc, char* argv[]) {
             }
             return 0;
         } else if (arg == "-n" || arg == "--no-handlers") {
-            hook_handlers = false;
+            hook_handler = false;
         } else {
             fprintf(stderr, "[ERR] Unknown argument: %s\n", argv[i]);
             return 1;
@@ -489,8 +490,8 @@ int main(int argc, char* argv[]) {
     }
 
     // add the signal handler
-    if (hook_handlers) {
-        signal(SIGINT, on_sigint);
+    signal(SIGINT, on_sigint);
+    if (hook_handler) {
         signal(SIGSEGV, on_sigsegv);
     }
 
