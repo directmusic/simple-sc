@@ -257,7 +257,7 @@ struct EncoderContext {
     }
 };
 
-static void on_process(void* userdata) {
+static void on_video_process(void* userdata) {
     struct VideoRecordData* data = (struct VideoRecordData*)userdata;
 
     struct pw_buffer* b;
@@ -300,7 +300,7 @@ static void on_process(void* userdata) {
     pw_stream_queue_buffer(data->stream, b);
 }
 
-static void on_param_changed(void* userdata, uint32_t id, const struct spa_pod* param) {
+static void on_video_param_changed(void* userdata, uint32_t id, const struct spa_pod* param) {
     struct VideoRecordData* data = (struct VideoRecordData*)userdata;
 
     if (id == SPA_PARAM_EnumFormat) {
@@ -326,7 +326,7 @@ static void on_param_changed(void* userdata, uint32_t id, const struct spa_pod* 
     printf("  framerate: %d/%d\n", data->format.info.raw.framerate.num, data->format.info.raw.framerate.denom);
 }
 
-static void on_state_changed(void* userdata, enum pw_stream_state old, enum pw_stream_state state, const char* error) {
+static void on_video_state_changed(void* userdata, enum pw_stream_state old, enum pw_stream_state state, const char* error) {
     if (state == PW_STREAM_STATE_ERROR) {
         g_done = true;
     }
@@ -339,9 +339,9 @@ static void on_state_changed(void* userdata, enum pw_stream_state old, enum pw_s
 
 static const struct pw_stream_events stream_events = {
     .version = PW_VERSION_STREAM_EVENTS,
-    .state_changed = on_state_changed,
-    .param_changed = on_param_changed,
-    .process = on_process,
+    .state_changed = on_video_state_changed,
+    .param_changed = on_video_param_changed,
+    .process = on_video_process,
 };
 
 // ----------------------------------------------
@@ -372,7 +372,7 @@ static void on_audio_process(void* userdata) {
     pw_stream_queue_buffer(g_audio_stream, b);
 }
 
-static void on_state_changed_audio(void* userdata, enum pw_stream_state old, enum pw_stream_state state, const char* error) {
+static void on_audio_state_changed(void* userdata, enum pw_stream_state old, enum pw_stream_state state, const char* error) {
     printf("audio state: %s -> %s (error: %s)\n",
            pw_stream_state_as_string(old),
            pw_stream_state_as_string(state),
@@ -382,7 +382,7 @@ static void on_state_changed_audio(void* userdata, enum pw_stream_state old, enu
 struct pw_stream* audio_stream;
 struct spa_audio_info audio_format;
 
-static void on_param_changed_audio(void* _data, uint32_t id, const struct spa_pod* param) {
+static void on_audio_param_changed(void* _data, uint32_t id, const struct spa_pod* param) {
     /* NULL means to clear the format */
     if (param == NULL || id != SPA_PARAM_Format)
         return;
@@ -402,8 +402,8 @@ static void on_param_changed_audio(void* _data, uint32_t id, const struct spa_po
 
 static const struct pw_stream_events audio_stream_events = {
     .version = PW_VERSION_STREAM_EVENTS,
-    .state_changed = on_state_changed_audio,
-    .param_changed = on_param_changed_audio,
+    .state_changed = on_audio_state_changed,
+    .param_changed = on_audio_param_changed,
     .process = on_audio_process,
 };
 
