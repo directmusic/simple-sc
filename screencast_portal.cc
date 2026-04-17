@@ -74,8 +74,16 @@ static void session_start_cb(GObject* source_object, GAsyncResult* result, gpoin
     g_main_loop_quit(g_gio_main_loop);
 }
 
+static void on_sigint(int dummy) {
+    (void)dummy;
+    g_main_loop_quit(g_gio_main_loop);
+    exit(0);
+}
+
 // reuturns true on success
 ScreencastPortalStatus create_screencast_portal(ScreencastPortalData* data_out) {
+    signal(SIGINT, on_sigint);
+
     g_gio_main_loop = g_main_loop_new(NULL, FALSE);
     auto portal = xdp_portal_new();
     xdp_portal_create_screencast_session(
@@ -89,7 +97,10 @@ ScreencastPortalStatus create_screencast_portal(ScreencastPortalData* data_out) 
         session_create_cb,
         nullptr);
 
-    std::thread portal_main_loop = std::thread([]() { g_main_loop_run(g_gio_main_loop); });
+    std::thread portal_main_loop = std::thread([]() {
+        g_main_loop_run(g_gio_main_loop);
+    });
+
     while (!g_session) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
