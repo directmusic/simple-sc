@@ -2,18 +2,21 @@
 #include "pipewire/properties.h"
 #include "pipewire/stream.h"
 #include "screencast_portal.hh"
+#include "shm.hh"
 #include "spa/utils/defs.h"
 #include "util.hh"
-#include <array>
 #include <libportal/portal.h>
 #include <pipewire/pipewire.h>
 #include <spa/debug/types.h>
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/video/format-utils.h>
 #include <spa/param/video/type-info.h>
-#include <string>
 #include <sys/time.h>
+
+#include <array>
+#include <string>
 #include <thread>
+#include <vector>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -65,6 +68,8 @@ struct EncoderContext {
     AVFrame* frame = nullptr;
     AVPacket* packet = nullptr;
     int64_t pts = 0;
+
+    int64_t prev_frame_pts = 0;
 
     // Audio
     AVCodecContext* audio_cod_ctx = nullptr;
@@ -181,11 +186,16 @@ struct EncoderContext {
         // drain
         while (avcodec_receive_packet(cod_ctx, packet) == 0) {
             packet->pts = raw->ts * g_time_scale_mul;
+            if (prev_frame_pts >= packet->pts) {
+                av_packet_unref(packet);
+                continue;
+            }
             packet->dts = raw->ts * g_time_scale_mul;
             packet->duration = g_time_scale_mul;
             packet->stream_index = stream->index;
             av_interleaved_write_frame(fmt_ctx, packet);
             av_packet_unref(packet);
+            prev_frame_pts = packet->pts;
         }
     }
 
@@ -399,12 +409,61 @@ static const struct pw_stream_events audio_stream_events = {
     .process = on_audio_process,
 };
 
+const char* g_output_file_path = nullptr;
+
+static void on_sigint(int dummy) {
+    (void)dummy;
+    g_done = true;
+}
+
 int main(int argc, char* argv[]) {
+
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+
+        if (arg == "-h" || arg == "--help") {
+            printf("Usage: simple-sc [options]\n");
+            printf("Options:\n");
+            printf("  -h, --help    Show this help message\n");
+            printf("  -o, --output  Change the output file path. (defaults to $HOME/Videos/[timestamp].mp4)\n");
+            printf("  -s, --stop    Stops other instances of simple-sc that may be in progress.\n");
+            return 0;
+        } else if (arg == "-o" || arg == "--output") {
+            if (i + 1 >= argc || argv[i + 1][0] == '-') {
+                fprintf(stderr, "[ERR] -o/--output flag requires a path\n");
+                return 1;
+            }
+            g_output_file_path = argv[i + 1];
+            i++;
+        } else if (arg == "-s" || arg == "--stop") {
+            pid_t pid = get_other_instance_pid();
+            printf("Stopping recording from pid: %d\n", pid);
+            kill(pid, SIGINT);
+            delete_handle();
+            return 0;
+        } else {
+            fprintf(stderr, "[ERR] Unknown argument: %s\n", argv[i]);
+            return 1;
+        }
+    }
+
+    if (handle_exists()) {
+        fprintf(stderr, "[WARN] a screen recording is already in progress. Run with the -s/--stop flag to stop in progress recordings");
+        return 1;
+    }
+
+    // add the signal handler
+    signal(SIGINT, on_sigint);
+
     // opens the portal dialog
     ScreencastPortalData portal_data;
-    if (!create_screencast_portal(&portal_data)) {
+    auto status = create_screencast_portal(&portal_data);
+    if (status == ScreencastPortalStatus::Error) {
         fprintf(stderr, "[ERR] Couldn't get access to org.freedesktop.portal.ScreenCast\n");
         return 1;
+    } else if (status == ScreencastPortalStatus::Cancelled) {
+        fprintf(stdout, "[WARN] ScreenCast cancelled\n");
+        return 0;
     }
 
     g_v_frame_data.resize(16);
@@ -534,8 +593,12 @@ int main(int argc, char* argv[]) {
             while (!g_video_frame_data.empty()) {
                 auto frame = g_video_frame_data.read();
                 if (!initialized) {
-                    char* home = getenv("HOME");
-                    enc.init((std::string(home) + "/Videos/" + make_date_time_string() + ".mp4").c_str(), frame->w, frame->h);
+                    if (!g_output_file_path) {
+                        char* home = getenv("HOME");
+                        enc.init((std::string(home) + "/Videos/" + make_date_time_string() + ".mp4").c_str(), frame->w, frame->h);
+                    } else {
+                        enc.init(g_output_file_path, frame->w, frame->h);
+                    }
                     initialized = true;
                 }
                 enc.submit_video(frame);
@@ -550,7 +613,10 @@ int main(int argc, char* argv[]) {
         // cleanup
         enc.close();
         pw_main_loop_quit(data.loop);
+        delete_handle();
     }));
+
+    create_handle_with_pid();
 
     pw_main_loop_run(data.loop);
 
@@ -560,6 +626,7 @@ int main(int argc, char* argv[]) {
     pw_core_disconnect(core);
     pw_context_destroy(context);
     pw_main_loop_destroy(data.loop);
+    delete_handle();
 
     return 0;
 }
