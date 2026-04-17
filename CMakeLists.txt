@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE STRING "")
 
-project(pw-record LANGUAGES C CXX VERSION 1.0.0)
-add_executable(pw-record main.cc screencast_portal.cc)
+project(simple-sc LANGUAGES C CXX VERSION 1.0.0)
+add_executable(simple-sc main.cc screencast_portal.cc shm.cc)
 
 find_package(PkgConfig)
 
@@ -17,7 +17,7 @@ pkg_check_modules(SWSCALE libswscale REQUIRED)
 pkg_check_modules(SWRESAMPLE libswresample REQUIRED)
 
 # Link libraries
-target_include_directories(pw-record PUBLIC
+target_include_directories(simple-sc PUBLIC
     ${PIPEWIRE_INCLUDE_DIRS}
     ${DBUS_INCLUDE_DIRS}
     ${PORTAL_INCLUDE_DIRS}
@@ -28,7 +28,7 @@ target_include_directories(pw-record PUBLIC
     ${SWRESAMPLE_INCLUDE_DIRS}
 )
 
-target_link_libraries(pw-record
+target_link_libraries(simple-sc
     ${PIPEWIRE_LIBRARIES}
     ${DBUS_LIBRARIES}
     ${PORTAL_LIBRARIES}
@@ -40,3 +40,5 @@ target_link_libraries(pw-record
     m
     z
 )
+
+install(TARGETS simple-sc)
