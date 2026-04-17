@@ -19,6 +19,11 @@ Besides it's fun creating things. The Desktop Portal already prompts to select b
 
 ### Installing
 
+**Arch (AUR)**\
+```yay -S simple-sc```
+
+### Building From Source
+
 Ensure the following dependencies are installed:\
 ```libpipewire-0.3 dbus-1 libportal libavcodec libavformat libavutil libswscale libswresample```
 
@@ -28,15 +33,13 @@ Ensure the following dependencies are installed:\
 **Ubuntu 22.04 (and later)**\
 ```apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev libswscale-dev libswresample-dev```
 
-##### Building From Source
-Once the dependencies above are installed then run the following command:
-
 ```
 git clone https://github.com/directmusic/simple-sc
 cd simple-sc
 cmake -B build
 cmake --build build --config Release
 ```
+
 To install:
 ```cd build && sudo make install```
 
