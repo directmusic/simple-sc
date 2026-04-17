@@ -417,7 +417,6 @@ static void on_sigint(int dummy) {
 }
 
 int main(int argc, char* argv[]) {
-
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
@@ -437,9 +436,15 @@ int main(int argc, char* argv[]) {
             i++;
         } else if (arg == "-s" || arg == "--stop") {
             pid_t pid = get_other_instance_pid();
-            printf("Stopping recording from pid: %d\n", pid);
-            kill(pid, SIGINT);
-            delete_handle();
+            if (pid == 0) {
+                fprintf(stderr, "No other instance of simple-sc running.");
+                // delete the handle anyway
+                delete_handle();
+            } else {
+                printf("Stopping recording from pid: %d\n", pid);
+                kill(pid, SIGINT);
+                delete_handle();
+            }
             return 0;
         } else {
             fprintf(stderr, "[ERR] Unknown argument: %s\n", argv[i]);
@@ -447,7 +452,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    if (handle_exists()) {
+    if (get_other_instance_pid() != 0) {
         fprintf(stderr, "[WARN] a screen recording is already in progress. Run with the -s/--stop flag to stop in progress recordings");
         return 1;
     }

@@ -6,13 +6,9 @@
 
 const char* const SHM_NAME = "simple-sc-instance-data";
 
-bool handle_exists() {
-    int fd = shm_open(SHM_NAME, O_RDWR, 0666);
-    return fd >= 0;
-}
-
+bool handle_exists() { return get_other_instance_pid() != 0; }
 pid_t get_other_instance_pid() {
-    int fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
+    int fd = shm_open(SHM_NAME, O_RDWR, 0666);
     if (fd >= 0) {
         ftruncate(fd, sizeof(SharedMemory));
         auto ptr = (SharedMemory*)mmap(nullptr, sizeof(SharedMemory), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
