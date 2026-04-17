@@ -44,6 +44,8 @@ libswresample
 
 ### Building
 
+Install the dependencies above then run the following command:
+
 ```
 cmake -B build
 cmake --build build --config Release
