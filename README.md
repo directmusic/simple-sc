@@ -1,12 +1,14 @@
 # simple-sc
 
+A simple PipeWire screen recording utility for Linux.
+
 ### Usage
 
 `simple-sc` will launch the ScreenCast portal, begin recording, save to `$HOME/Videos/` by default.
 
 ###### Flags
-`-h, --help` self explanatory.
-`-s, --stop` will stop a running instance of simple-sc, useful if you need a keybind to stop.
+`-h, --help` self explanatory.\
+`-s, --stop` will stop a running instance of simple-sc, useful if you need a keybind to stop.\
 `-o, --output` allows one to select the output path.
 
 ### Why did you make this? Aren't there are many good screen recording utilities like wf-recorder, OBS, Spectacle, etc...
@@ -17,50 +19,35 @@ Besides it's fun creating things. The Desktop Portal already prompts to select b
 
 ### Installing
 
-###### Dependencies
-Ensure the following dependencies are installed:
-`libpipewire-0.3 dbus-1 libportal libavcodec libavformat libavutil libswscale libswresample`
+Ensure the following dependencies are installed:\
+```libpipewire-0.3 dbus-1 libportal libavcodec libavformat libavutil libswscale libswresample```
 
-**Arch**
-`pacman -S base-devel cmake libpipewire dbus libportal ffmpeg`
+**Arch**\
+```pacman -S base-devel cmake libpipewire dbus libportal ffmpeg```
 
-**Ubuntu 22.04 (and later)**
-`apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev`
+**Ubuntu 22.04 (and later)**\
+```apt install build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev```
 
-### Dependencies
-
-```
-libpipewire-0.3
-dbus-1
-libportal
-
-# ffmpeg's libraries
-libavcodec
-libavformat
-libavutil
-libswscale
-libswresample
-```
-
-### Building
-
-Install the dependencies above then run the following command:
+##### Building From Source
+Once the dependencies above are installed then run the following command:
 
 ```
+git clone https://github.com/directmusic/simple-sc
+cd simple-sc
 cmake -B build
 cmake --build build --config Release
 ```
-
-##### Installing
-```
-cmake -B build
-cmake --build build --target install --config Release
-```
+To install:
+```cd build && sudo make install```
 
 ### Is This Vibe-Coded?
 
-No, but I did use a chatbot to learn about frame-timing and to help understand the encoding process.
+No, but I did use a chatbot to learn about frame-timing and to help understand the encoding process. I will follow up and update this if/when any AI tools are used during development.
+
+### Similar Tools
+[wf-recorder](https://github.com/ammen99/wf-recorder)\
+[Spectacle](https://github.com/kde/spectacle)
 
 ### Acknowledgments
+[OBS](https://github.com/obsproject/obs-studio) - For inspiring me to create this.\
 [wemeet-wayland-screenshare](https://github.com/xuwd1/wemeet-wayland-screenshare) - For helping me understand the PipeWire initialization flow.
-
