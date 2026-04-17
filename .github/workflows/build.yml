@@ -12,8 +12,10 @@ jobs:
         run: |
           sudo apt install -y build-essential cmake libpipewire-0.3-dev libdbus-1-dev libportal-dev libavcodec-dev libavformat-dev
       - name: Generate Build Script
+        working-directory: ${{ github.workspace }}/
         run: |
           cmake -B build
       - name: Build
+        working-directory: ${{ github.workspace }}/
         run: |
           cmake --build build --config Release
