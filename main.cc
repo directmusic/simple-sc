@@ -3,9 +3,9 @@
 #include "pipewire/stream.h"
 #include "screencast_portal.hh"
 #include "shm.hh"
+#include "spa/buffer/meta.h"
 #include "spa/utils/defs.h"
 #include "util.hh"
-#include <cstdint>
 #include <libportal/portal.h>
 #include <pipewire/pipewire.h>
 #include <spa/debug/types.h>
@@ -14,6 +14,8 @@
 #include <spa/param/video/type-info.h>
 #include <sys/time.h>
 
+#include <atomic>
+#include <cstdint>
 #include <string>
 #include <thread>
 #include <vector>
@@ -130,7 +132,11 @@ struct EncoderContext {
         audio_cod_ctx = avcodec_alloc_context3(audio_codec);
 
         audio_cod_ctx->sample_rate = 48000;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 24, 100)
         audio_cod_ctx->ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+#else
+        audio_cod_ctx->channel_layout = AV_CH_LAYOUT_STEREO;
+#endif
         audio_cod_ctx->sample_fmt = AV_SAMPLE_FMT_FLTP;
         audio_cod_ctx->bit_rate = 128000;
         audio_cod_ctx->time_base = { 1, 48000 };
@@ -145,11 +151,16 @@ struct EncoderContext {
         // frame sized to the codec's required frame size
         audio_frame = av_frame_alloc();
         audio_frame->format = AV_SAMPLE_FMT_FLTP;
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 24, 100)
         audio_frame->ch_layout = AV_CHANNEL_LAYOUT_STEREO;
+#else
+        audio_frame->channel_layout = AV_CH_LAYOUT_STEREO;
+#endif
         audio_frame->sample_rate = 48000;
         audio_frame->nb_samples = audio_cod_ctx->frame_size;
         av_frame_get_buffer(audio_frame, 0);
 
+#if LIBAVUTIL_VERSION_INT >= AV_VERSION_INT(57, 24, 100)
         swr_alloc_set_opts2(&swr_ctx,
                             &audio_cod_ctx->ch_layout,
                             AV_SAMPLE_FMT_FLTP,
@@ -159,6 +170,17 @@ struct EncoderContext {
                             48000, // in
                             0,
                             NULL);
+#else
+        swr_ctx = swr_alloc_set_opts(nullptr,
+                                     audio_cod_ctx->channel_layout = AV_CH_LAYOUT_STEREO,
+                                     AV_SAMPLE_FMT_FLTP,
+                                     48000, // out
+                                     audio_cod_ctx->channel_layout = AV_CH_LAYOUT_STEREO,
+                                     AV_SAMPLE_FMT_S16,
+                                     48000, // in
+                                     0,
+                                     NULL);
+#endif
         swr_init(swr_ctx);
 
         avio_open(&fmt_ctx->pb, output_path, AVIO_FLAG_WRITE);
@@ -270,9 +292,6 @@ static void on_video_process(void* userdata) {
 
     struct spa_buffer* buf = b->buffer;
     struct spa_data* d = &buf->datas[0];
-
-    struct spa_meta_sync_timeline* synctimeline
-        = (struct spa_meta_sync_timeline*)spa_buffer_find_meta_data(b->buffer, SPA_META_SyncTimeline, sizeof(struct spa_meta_sync_timeline));
 
     VideoFrame* frame = &g_v_frame_data[g_v_frame_idx];
 
@@ -411,6 +430,7 @@ const char* g_output_file_path = nullptr;
 
 static void on_sigint(int dummy) {
     (void)dummy;
+    printf("[LOG] Handling sigint...\n");
     g_done = true;
 }
 
@@ -421,6 +441,7 @@ static void on_sigsegv(int dummy) {
 }
 
 int main(int argc, char* argv[]) {
+    bool hook_handlers = true;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
 
@@ -450,6 +471,8 @@ int main(int argc, char* argv[]) {
                 shm_delete_handle();
             }
             return 0;
+        } else if (arg == "-n" || arg == "--no-handlers") {
+            hook_handlers = false;
         } else {
             fprintf(stderr, "[ERR] Unknown argument: %s\n", argv[i]);
             return 1;
@@ -459,12 +482,17 @@ int main(int argc, char* argv[]) {
     if (shm_get_other_instance_pid() != 0) {
         fprintf(stderr, "[WARN] a screen recording is already in progress. Run with the -s/--stop flag to stop in progress recordings");
         auto pid = shm_get_other_instance_pid();
-        return 1;
+        printf("Stopping recording from pid: %d\n", pid);
+        kill(pid, SIGINT);
+        shm_delete_handle();
+        // return 1;
     }
 
     // add the signal handler
-    signal(SIGINT, on_sigint);
-    signal(SIGSEGV, on_sigsegv);
+    if (hook_handlers) {
+        signal(SIGINT, on_sigint);
+        signal(SIGSEGV, on_sigsegv);
+    }
 
     // opens the portal dialog
     ScreencastPortalData portal_data;
@@ -519,31 +547,31 @@ int main(int argc, char* argv[]) {
     auto min_fps = SPA_FRACTION(0, 1);
     auto max_fps = SPA_FRACTION(1000, 1);
 
-    video_params[0] = reinterpret_cast<spa_pod*>(spa_pod_builder_add_object(&video_b,
-                                                                            SPA_TYPE_OBJECT_Format,
-                                                                            SPA_PARAM_EnumFormat,
-                                                                            SPA_FORMAT_mediaType,
-                                                                            SPA_POD_Id(SPA_MEDIA_TYPE_video),
-                                                                            SPA_FORMAT_mediaSubtype,
-                                                                            SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
-                                                                            SPA_FORMAT_VIDEO_format,
-                                                                            SPA_POD_CHOICE_ENUM_Id(6,
-                                                                                                   SPA_VIDEO_FORMAT_RGB,
-                                                                                                   SPA_VIDEO_FORMAT_BGR,
-                                                                                                   SPA_VIDEO_FORMAT_RGBA,
-                                                                                                   SPA_VIDEO_FORMAT_BGRA,
-                                                                                                   SPA_VIDEO_FORMAT_RGBx,
-                                                                                                   SPA_VIDEO_FORMAT_BGRx),
-                                                                            SPA_FORMAT_VIDEO_size,
-                                                                            SPA_POD_CHOICE_RANGE_Rectangle(
-                                                                                &default_rect,
-                                                                                &min_rect,
-                                                                                &max_rect),
-                                                                            SPA_FORMAT_VIDEO_framerate,
-                                                                            SPA_POD_CHOICE_RANGE_Fraction(
-                                                                                &default_fps,
-                                                                                &min_fps,
-                                                                                &max_fps)));
+    video_params[0] = (spa_pod*)(spa_pod_builder_add_object(&video_b,
+                                                            SPA_TYPE_OBJECT_Format,
+                                                            SPA_PARAM_EnumFormat,
+                                                            SPA_FORMAT_mediaType,
+                                                            SPA_POD_Id(SPA_MEDIA_TYPE_video),
+                                                            SPA_FORMAT_mediaSubtype,
+                                                            SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),
+                                                            SPA_FORMAT_VIDEO_format,
+                                                            SPA_POD_CHOICE_ENUM_Id(6,
+                                                                                   SPA_VIDEO_FORMAT_RGB,
+                                                                                   SPA_VIDEO_FORMAT_BGR,
+                                                                                   SPA_VIDEO_FORMAT_RGBA,
+                                                                                   SPA_VIDEO_FORMAT_BGRA,
+                                                                                   SPA_VIDEO_FORMAT_RGBx,
+                                                                                   SPA_VIDEO_FORMAT_BGRx),
+                                                            SPA_FORMAT_VIDEO_size,
+                                                            SPA_POD_CHOICE_RANGE_Rectangle(
+                                                                &default_rect,
+                                                                &min_rect,
+                                                                &max_rect),
+                                                            SPA_FORMAT_VIDEO_framerate,
+                                                            SPA_POD_CHOICE_RANGE_Fraction(
+                                                                &default_fps,
+                                                                &min_fps,
+                                                                &max_fps)));
 
     // AUDIO
     struct pw_properties* audio_props
