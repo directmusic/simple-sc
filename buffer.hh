@@ -1,10 +1,10 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <stdlib.h>
 #include <string.h>
-#include <vector>
 
 #ifdef _WIN32
 #define aligned_alloc(alignment, size) _aligned_malloc(size, alignment)
