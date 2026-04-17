@@ -8,4 +8,9 @@ struct ScreencastPortalData {
     uint32_t node_id;
 };
 
-bool create_screencast_portal(ScreencastPortalData* data_out);
+enum class ScreencastPortalStatus {
+    Cancelled = -1,
+    Error = 0,
+    Success = 1,
+};
+ScreencastPortalStatus create_screencast_portal(ScreencastPortalData* data_out);

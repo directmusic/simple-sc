@@ -11,19 +11,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <atomic>
 #include <cstdint>
 #include <thread>
 
-XdpSession* g_session = nullptr;
+std::atomic<XdpSession*> g_session = nullptr;
 GMainLoop* g_gio_main_loop = nullptr;
 
-enum class XdpScreencastPortalStatus {
-    kInit,
-    kRunning,
-    kCancelled,
-};
-
-XdpScreencastPortalStatus g_status = XdpScreencastPortalStatus::kInit;
+enum class PortalState {
+    None,
+    Running,
+    Cancelled,
+} g_status
+    = PortalState::None;
 
 static int g_pipewire_fd = 0;
 static uint32_t g_pipewire_node_id = 0;
@@ -41,28 +41,17 @@ static void session_create_cb(GObject* source_object, GAsyncResult* result, gpoi
     }
 }
 
-std::thread payload_start_portal_gio_mainloop_thread() {
-    // this thread is going to be trapped in the gio mainloop
-    std::thread portal_gio_mainloop_thread = std::thread([]() {
-        g_main_loop_run(g_gio_main_loop);
-    });
-    while (!g_session) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    return std::move(portal_gio_mainloop_thread);
-}
-
 static void session_start_cb(GObject* source_object, GAsyncResult* result, gpointer user_data) {
     GError* error = nullptr;
     if (!xdp_session_start_finish(XDP_SESSION(source_object), result, &error)) {
         g_warning("Failed to start screencast session: %s", error->message);
         g_error_free(error);
-        g_status = XdpScreencastPortalStatus::kCancelled;
+        g_status = PortalState::Cancelled;
         g_main_loop_quit(g_gio_main_loop);
         return;
     }
 
-    g_status = XdpScreencastPortalStatus::kRunning;
+    g_status = PortalState::Running;
     g_pipewire_fd = xdp_session_open_pipewire_remote(XDP_SESSION(source_object));
 
     GVariant* streams = xdp_session_get_streams(XDP_SESSION(source_object));
@@ -86,7 +75,7 @@ static void session_start_cb(GObject* source_object, GAsyncResult* result, gpoin
 }
 
 // reuturns true on success
-bool create_screencast_portal(ScreencastPortalData* data_out) {
+ScreencastPortalStatus create_screencast_portal(ScreencastPortalData* data_out) {
     g_gio_main_loop = g_main_loop_new(NULL, FALSE);
     auto portal = xdp_portal_new();
     xdp_portal_create_screencast_session(
@@ -100,23 +89,28 @@ bool create_screencast_portal(ScreencastPortalData* data_out) {
         session_create_cb,
         nullptr);
 
-    std::thread portal_gio_mainloop_thread = payload_start_portal_gio_mainloop_thread();
+    std::thread portal_main_loop = std::thread([]() { g_main_loop_run(g_gio_main_loop); });
+    while (!g_session) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
 
     g_main_context_invoke(g_main_loop_get_context(g_gio_main_loop), [](gpointer) -> gboolean {
         xdp_session_start(g_session, NULL, NULL, session_start_cb, nullptr);
         return G_SOURCE_REMOVE; }, nullptr);
 
-    portal_gio_mainloop_thread.join();
+    portal_main_loop.join();
 
-    if (g_status == XdpScreencastPortalStatus::kCancelled) return 1;
+    if (g_status == PortalState::Cancelled) {
+        return ScreencastPortalStatus::Cancelled;
+    }
 
     if (g_pipewire_fd == -1) {
         fprintf(stderr, "Failed to open pipewire remote\n");
-        return false;
+        return ScreencastPortalStatus::Error;
     }
 
     data_out->fd = g_pipewire_fd;
     data_out->node_id = g_pipewire_node_id;
 
-    return true;
+    return ScreencastPortalStatus::Success;
 }
