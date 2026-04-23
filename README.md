@@ -49,7 +49,8 @@ No, but I did use a chatbot to learn about frame-timing and to help understand t
 
 ### Similar Tools
 [wf-recorder](https://github.com/ammen99/wf-recorder)\
-[Spectacle](https://github.com/kde/spectacle)
+[Spectacle](https://github.com/kde/spectacle)\
+[gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-recorder/about/)
 
 ### Acknowledgments
 [OBS](https://github.com/obsproject/obs-studio) - For inspiring me to create this.\
