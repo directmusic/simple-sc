@@ -489,12 +489,6 @@ int main(int argc, char* argv[]) {
         // return 1;
     }
 
-    // add the signal handler
-    signal(SIGINT, on_sigint);
-    if (hook_handler) {
-        signal(SIGSEGV, on_sigsegv);
-    }
-
     // opens the portal dialog
     ScreencastPortalData portal_data;
     auto status = create_screencast_portal(&portal_data);
@@ -504,6 +498,12 @@ int main(int argc, char* argv[]) {
     } else if (status == ScreencastPortalStatus::Cancelled) {
         fprintf(stdout, "[WARN] ScreenCast cancelled\n");
         return 0;
+    }
+
+    // add the signal handler
+    signal(SIGINT, on_sigint);
+    if (hook_handler) {
+        signal(SIGSEGV, on_sigsegv);
     }
 
     g_v_frame_data.resize(VIDEO_DATA_SIZE);
