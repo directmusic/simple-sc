@@ -472,7 +472,7 @@ int main(int argc, char* argv[]) {
                 shm_delete_handle();
             }
             return 0;
-        } else if (arg == "-n" || arg == "--no-handlers") {
+        } else if (arg == "-n" || arg == "--no-handler") {
             hook_handler = false;
         } else {
             fprintf(stderr, "[ERR] Unknown argument: %s\n", argv[i]);
