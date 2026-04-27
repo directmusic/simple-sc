@@ -346,7 +346,8 @@ static void on_video_param_changed(void* userdata, uint32_t id, const struct spa
 }
 
 static void on_video_state_changed(void* userdata, enum pw_stream_state old, enum pw_stream_state state, const char* error) {
-    if (state == PW_STREAM_STATE_ERROR) {
+    if (state == PW_STREAM_STATE_ERROR
+        || (old == PW_STREAM_STATE_STREAMING && state == PW_STREAM_STATE_PAUSED)) {
         g_done = true;
     }
 
